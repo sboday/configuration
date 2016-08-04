@@ -1,6 +1,6 @@
 import argparse
-import boto
-from boto.utils import get_instance_metadata
+import boto.ec2
+from boto.utils import get_instance_metadata, get_instance_identity
 from boto.exception import AWSConnectionError
 import hipchat
 import os
@@ -13,7 +13,7 @@ import time
 MIGRATION_COMMANDS = {
         'lms':     "NO_EDXAPP_SUDO=1 /edx/bin/edxapp-migrate-lms --noinput --list",
         'cms':     "NO_EDXAPP_SUDO=1 /edx/bin/edxapp-migrate-cms --noinput --list",
-        'xqueue': "{python} {code_dir}/manage.py xqueue migrate --noinput --settings=aws --db-dry-run --merge",
+        'xqueue':  "SERVICE_VARIANT=xqueue {python} {code_dir}/manage.py migrate --noinput --list --settings=xqueue.aws_settings",
         'ecommerce':     ". {env_file}; {python} {code_dir}/manage.py migrate --noinput --list",
         'programs':      ". {env_file}; {python} {code_dir}/manage.py migrate --noinput --list",
         'insights':      ". {env_file}; {python} {code_dir}/manage.py migrate --noinput --list",
@@ -27,12 +27,14 @@ HIPCHAT_USER = "PreSupervisor"
 MAX_BACKOFF = 120
 INITIAL_BACKOFF = 1
 
+REGION = get_instance_identity()['document']['region']
+
 def services_for_instance(instance_id):
     """
     Get the list of all services named by the services tag in this
     instance's tags.
     """
-    ec2 = boto.connect_ec2()
+    ec2 = boto.ec2.connect_to_region(REGION)
     reservations = ec2.get_all_instances(instance_ids=[instance_id])
     for reservation in reservations:
         for instance in reservation.instances:
@@ -47,7 +49,7 @@ def services_for_instance(instance_id):
                     yield service
 
 def edp_for_instance(instance_id):
-    ec2 = boto.connect_ec2()
+    ec2 = boto.ec2.connect_to_region(REGION)
     reservations = ec2.get_all_instances(instance_ids=[instance_id])
     for reservation in reservations:
         for instance in reservation.instances:
@@ -164,8 +166,7 @@ if __name__ == '__main__':
     instance_id = get_instance_metadata()['instance-id']
     prefix = instance_id
 
-
-    ec2 = boto.connect_ec2()
+    ec2 = boto.ec2.connect_to_region(REGION)
     reservations = ec2.get_all_instances(instance_ids=[instance_id])
     instance = reservations[0].instances[0]
     if instance.instance_profile['arn'].endswith('/abbey'):
@@ -229,7 +230,7 @@ if __name__ == '__main__':
                 # Do extra migration related stuff.
                 if service == 'xqueue' and args.xqueue_code_dir:
                     cmd = MIGRATION_COMMANDS[service].format(python=args.xqueue_python,
-                        code_dir=xqueue_code_dir)
+                        code_dir=args.xqueue_code_dir)
                     if os.path.exists(args.xqueue_code_dir):
                         os.chdir(args.xqueue_code_dir)
                         # Run migration check command.

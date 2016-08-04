@@ -9,7 +9,7 @@ import requests
 try:
     import boto.ec2
     import boto.sqs
-    from boto.vpc import VPCConnection
+    import boto.vpc
     from boto.exception import NoAuthHandlerFound, EC2ResponseError
     from boto.sqs.message import RawMessage
     from boto.ec2.blockdevicemapping import BlockDeviceType, BlockDeviceMapping
@@ -90,7 +90,7 @@ def parse_args():
                         help="configuration-private repo gitref",
                         default="master")
     parser.add_argument('--configuration-private-repo', required=False,
-                        default="git@github.com:edx-ops/ansible-private",
+                        default="",
                         help="repo to use for private playbooks")
     parser.add_argument('-c', '--cache-id', required=True,
                         help="unique id to use as part of cache prefix")
@@ -157,6 +157,18 @@ def get_instance_sec_group(vpc_id):
     )
 
     if len(grp_details) < 1:
+        #
+        # try scheme for non-cloudformation builds
+        #
+
+        grp_details = ec2.get_all_security_groups(
+            filters={
+                'tag:play': args.play,
+                'tag:environment': args.environment,
+                'tag:deployment': args.deployment}
+        )
+
+    if len(grp_details) < 1:
         sys.stderr.write("ERROR: Expected atleast one security group, got {}\n".format(
             len(grp_details)))
 
@@ -188,7 +200,7 @@ def create_instance_args():
     user data
     """
 
-    vpc = VPCConnection()
+    vpc = boto.vpc.connect_to_region(args.region)
     subnet = vpc.get_all_subnets(
         filters={
             'tag:aws:cloudformation:stack-name': stack_name,
@@ -202,14 +214,14 @@ def create_instance_args():
 
         subnet = vpc.get_all_subnets(
             filters={
-                'tag:cluster': args.play,
+                'tag:play': args.play,
                 'tag:environment': args.environment,
                 'tag:deployment': args.deployment}
         )
 
     if len(subnet) < 1:
-        sys.stderr.write("ERROR: Expected at least one subnet, got {}\n".format(
-            len(subnet)))
+        sys.stderr.write("ERROR: Expected at least one subnet, got {} for {}-{}-{}\n".format(
+            len(subnet), args.environment, args.deployment, args.play))
         sys.exit(1)
     subnet_id = subnet[0].id
     vpc_id = subnet[0].vpc_id
@@ -265,7 +277,7 @@ fi
 
 ANSIBLE_ENABLE_SQS=true
 SQS_NAME={queue_name}
-SQS_REGION=us-east-1
+SQS_REGION={region}
 SQS_MSG_PREFIX="[ $instance_id $instance_ip $environment-$deployment $play ]"
 PYTHONUNBUFFERED=1
 HIPCHAT_TOKEN={hipchat_token}
@@ -287,8 +299,28 @@ if [[ ! -x /usr/bin/git || ! -x /usr/bin/pip ]]; then
         libxslt-dev curl libmysqlclient-dev --force-yes
 fi
 
-# upgrade setuptools early to avoid no distributin errors
-pip install --upgrade setuptools==18.3.2
+# python3 is required for certain other things
+# (currently xqwatcher so it can run python2 and 3 grader code,
+# but potentially more in the future). It's not available on Ubuntu 12.04,
+# but in those cases we don't need it anyways.
+if [[ -n "$(apt-cache search --names-only '^python3-pip$')" ]]; then
+    /usr/bin/apt-get update
+    /usr/bin/apt-get install -y python3-pip python3-dev
+fi
+
+# this is missing on 14.04 (base package on 12.04)
+# we need to do this on any build, since the above apt-get
+# only runs on a build from scratch
+/usr/bin/apt-get install -y python-httplib2 --force-yes
+
+# Must upgrade to latest before pinning to work around bug
+# https://github.com/pypa/pip/issues/3862
+pip install --upgrade pip
+hash -r   #pip may have moved from /usr/bin/ to /usr/local/bin/. This clears bash's path cache.
+pip install --upgrade pip==8.1.2
+
+# upgrade setuptools early to avoid no distribution errors
+pip install --upgrade setuptools==24.0.3
 
 rm -rf $base_dir
 mkdir -p $base_dir
@@ -392,7 +424,8 @@ rm -rf $base_dir
                 extra_vars_yml=extra_vars_yml,
                 secure_vars_file=secure_vars_file,
                 cache_id=args.cache_id,
-                datadog_api_key=args.datadog_api_key)
+                datadog_api_key=args.datadog_api_key,
+                region=args.region)
 
     mapping = BlockDeviceMapping()
     root_vol = BlockDeviceType(size=args.root_vol_size,
@@ -637,7 +670,7 @@ def launch_and_configure(ec2_args):
     system_start = time.time()
     for _ in xrange(EC2_STATUS_TIMEOUT):
         status = ec2.get_all_instance_status(inst.id)
-        if status[0].system_status.status == u'ok':
+        if status and status[0].system_status.status == u'ok':
             system_delta = time.time() - system_start
             run_summary.append(('EC2 Status Checks', system_delta))
             print "[ OK ] {:0>2.0f}:{:0>2.0f}".format(

@@ -68,6 +68,12 @@ openedx_releases = {
   "named-release/dogwood.1" => {
     :name => "dogwood-devstack-2016-03-09", :file => "dogwood-devstack-2016-03-09.box",
   },
+  "named-release/dogwood.2" => {
+    :name => "dogwood-devstack-2016-03-09", :file => "dogwood-devstack-2016-03-09.box",
+  },
+  "named-release/dogwood.3" => {
+    :name => "dogwood-devstack-2016-03-09", :file => "dogwood-devstack-2016-03-09.box",
+  },
   "named-release/dogwood" => {
     :name => "dogwood-devstack-rc2", :file => "20151221-dogwood-devstack-rc2.box",
   },
@@ -81,7 +87,7 @@ openedx_releases = {
   # },
 }
 openedx_releases.default = {
-  :name => "devstack-periodic-2016-04-04", :file => "devstack-periodic-2016-04-04.box",
+  :name => "devstack-periodic-2016-05-16", :file => "devstack-periodic-2016-05-16.box",
 }
 rel = ENV['OPENEDX_RELEASE']
 

@@ -1,5 +1,5 @@
 {%- if "cms" in nginx_default_sites -%}
-  {%- set default_site = "default" -%}
+  {%- set default_site = "default_server" -%}
 {%- else -%}
   {%- set default_site = "" -%}
 {%- endif -%}
@@ -43,7 +43,7 @@ error_page {{ k }} {{ v }};
   {% endif %}
 
   # Prevent invalid display courseware in IE 10+ with high privacy settings
-  add_header P3P 'CP="Open EdX does not have a P3P policy."';
+  add_header P3P '{{ NGINX_P3P_MESSAGE }}';
 
   # Nginx does not support nested condition or or conditions so
   # there is an unfortunate mix of conditonals here.
@@ -101,7 +101,9 @@ error_page {{ k }} {{ v }};
   }
 
   location / {
-    {% include "basic-auth.j2" %}
+    {% if EDXAPP_CMS_ENABLE_BASIC_AUTH|bool %}
+      {% include "basic-auth.j2" %}
+    {% endif %}
     try_files $uri @proxy_to_cms_app;
   }
 

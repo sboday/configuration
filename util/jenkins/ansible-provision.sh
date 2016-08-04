@@ -124,7 +124,7 @@ if [[ -z $ami ]]; then
 fi
 
 if [[ -z $instance_type ]]; then
-  instance_type="t2.medium"
+  instance_type="t2.large"
 fi
 
 if [[ -z $enable_newrelic ]]; then
@@ -173,7 +173,7 @@ edx_ansible_source_repo: ${configuration_source_repo}
 edx_platform_repo: ${edx_platform_repo}
 
 EDXAPP_PLATFORM_NAME: $sandbox_platform_name
-EDXAPP_COMPREHENSIVE_THEME_DIR: $edxapp_comprehensive_theme_dir
+EDXAPP_COMPREHENSIVE_THEME_DIRS: $edxapp_comprehensive_theme_dirs
 
 EDXAPP_STATIC_URL_BASE: $static_url_base
 EDXAPP_LMS_NGINX_PORT: 80
@@ -199,7 +199,6 @@ NGINX_SET_X_FORWARDED_HEADERS: True
 NGINX_REDIRECT_TO_HTTPS: True
 EDX_ANSIBLE_DUMP_VARS: true
 migrate_db: "yes"
-openid_workaround: True
 rabbitmq_ip: "127.0.0.1"
 rabbitmq_refresh: True
 COMMON_HOSTNAME: $dns_name
@@ -273,6 +272,7 @@ FORUM_NEW_RELIC_APP_NAME: sandbox-${dns_name}-forums
 SANDBOX_USERNAME: $github_username
 EDXAPP_ECOMMERCE_PUBLIC_URL_ROOT: "https://ecommerce-${deploy_host}"
 EDXAPP_ECOMMERCE_API_URL: "https://ecommerce-${deploy_host}/api/v2"
+EDXAPP_COURSE_CATALOG_API_URL: "https://catalog-${deploy_host}/api/v1"
 
 ECOMMERCE_ECOMMERCE_URL_ROOT: "https://ecommerce-${deploy_host}"
 ECOMMERCE_LMS_URL_ROOT: "https://${deploy_host}"
@@ -281,15 +281,18 @@ ECOMMERCE_SOCIAL_AUTH_REDIRECT_IS_HTTPS: true
 PROGRAMS_LMS_URL_ROOT: "https://${deploy_host}"
 PROGRAMS_URL_ROOT: "https://programs-${deploy_host}"
 PROGRAMS_SOCIAL_AUTH_REDIRECT_IS_HTTPS: true
+PROGRAMS_CORS_ORIGIN_WHITELIST:
+  - studio-${deploy_host}
 
 CREDENTIALS_LMS_URL_ROOT: "https://${deploy_host}"
 CREDENTIALS_DOMAIN: "credentials-${deploy_host}"
-CREDENTIALS_URL_ROOT: "http://{{ CREDENTIALS_DOMAIN }}"
+CREDENTIALS_URL_ROOT: "https://{{ CREDENTIALS_DOMAIN }}"
 CREDENTIALS_SOCIAL_AUTH_REDIRECT_IS_HTTPS: true
 COURSE_DISCOVERY_ECOMMERCE_API_URL: "https://ecommerce-${deploy_host}/api/v2"
 
 DISCOVERY_URL_ROOT: "https://discovery-${deploy_host}"
 DISCOVERY_SOCIAL_AUTH_REDIRECT_IS_HTTPS: true
+DISCOVERY_PROGRAMS_API_URL: "{{ PROGRAMS_URL_ROOT }}/api/v1/"
 
 EOF
 fi
@@ -316,7 +319,6 @@ instance_tags:
 root_ebs_size: $root_ebs_size
 name_tag: $name_tag
 dns_zone: $dns_zone
-rabbitmq_refresh: True
 elb: $elb
 EOF
 
@@ -354,6 +356,9 @@ if [[ $reconfigure != "true" && $server_type == "full_edx_installation" ]]; then
         if [[ ${deploy[$i]} == "true" ]]; then
             cat $extra_vars_file
             run_ansible ${i}.yml -i "${deploy_host}," $extra_var_arg --user ubuntu
+            if [[ ${i} == "edxapp" ]]; then
+                run_ansible worker.yml -i "${deploy_host}," $extra_var_arg --user ubuntu
+            fi
         fi
     done
 fi

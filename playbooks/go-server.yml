@@ -4,8 +4,12 @@
 
 - name: Install go-server
   hosts: all
-  sudo: True
+  become: True
   gather_facts: True
   roles:
-  - aws
-  - go-server
+    - aws
+    - go-server
+    - role: splunkforwarder
+      when: COMMON_ENABLE_SPLUNKFORWARDER
+    - role: newrelic
+      when: COMMON_ENABLE_NEWRELIC

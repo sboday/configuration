@@ -1,5 +1,5 @@
 {%- if "kibana" in nginx_default_sites -%}
-  {%- set default_site = "default" -%}
+  {%- set default_site = "default_server" -%}
 {%- else -%}
   {%- set default_site = "" -%}
 {%- endif -%}
@@ -57,7 +57,9 @@ server {
   error_log {{ nginx_log_dir }}/kibana.error.log error;
 
   # Access restriction
-  {% include "basic-auth.j2" %}
+  {% if KIBANA_ENABLE_BASIC_AUTH|bool %}
+    {% include "basic-auth.j2" %}
+  {% endif %}
 
   # Set image format types to expire in a very long time
   location ~* ^.+\.(jpg|jpeg|gif|png|ico)$ {

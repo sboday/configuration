@@ -3,6 +3,8 @@ jenkins_user: "jenkins"
 jenkins_group: "edx"
 jenkins_server_name: "jenkins.testeng.edx.org"
 jenkins_port: 8080
+jenkins_nginx_port: 80
+jenkins_protocol_https: true
 
 jenkins_version: "1.638"
 jenkins_deb_url: "http://pkg.jenkins-ci.org/debian/binary/jenkins_{{ jenkins_version }}_all.deb"
@@ -35,7 +37,7 @@ jenkins_plugins:
     - { name: "git-client", version: "1.19.0"}
     - { name: "github", version: "1.14.0" }
     - { name: "github-api", version: "1.69" }
-    - { name: "github-oauth", version: "0.20" }
+    - { name: "github-oauth", version: "0.22.3" }
     - { name: "github-sqs-plugin", version: "1.5" }
     - { name: "gradle", version: "1.24" }
     - { name: "grails", version: "1.7" }
@@ -62,6 +64,7 @@ jenkins_plugins:
     - { name: "postbuild-task", version: "1.8" }
     - { name: "plain-credentials", version: "1.1" }
     - { name: "PrioritySorter", version: "2.9" }
+    - { name: "rebuild", version: "1.25" }
     - { name: "sauce-ondemand", version: "1.61" }
     - { name: "scm-api", version: "0.2" }
     - { name: "script-security", version: "1.12" }
@@ -98,6 +101,7 @@ jenkins_debian_pkgs:
     - maven
     - daemon
     - python-pycurl
+    - psmisc
 
 # Extra packages need for a specific jenkins instance.
 JENKINS_EXTRA_PKGS: []

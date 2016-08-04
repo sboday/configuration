@@ -9,7 +9,7 @@
 #
 ##
 # Defaults for role discovery
-# 
+#
 DISCOVERY_GIT_IDENTITY: !!null
 
 # depends upon Newrelic being enabled via COMMON_ENABLE_NEWRELIC
@@ -37,28 +37,39 @@ DISCOVERY_DATABASES:
     ATOMIC_REQUESTS: true
     CONN_MAX_AGE: 60
 
-DISCOVERY_ELASTICSEARCH_HOST: 'localhost'
-DISCOVERY_ES_INDEX: 'discovery'
-
-DISCOVERY_ELASTICSEARCH:
-  host: '{{ DISCOVERY_ELASTICSEARCH_HOST }}'
-  index: '{{ DISCOVERY_ES_INDEX }}'
+# Using SSL? See https://www.elastic.co/guide/en/shield/current/ssl-tls.html.
+# Using AWS? Use the AWS-provided host (e.g. https://search-test-abc123.us-east-1.es.amazonaws.com/).
+# Assuming the port corresponds that of the protocol (e.g. http=80, https=443), there is no need to specify a port.
+DISCOVERY_ELASTICSEARCH_URL: 'http://127.0.0.1:9200/'
+DISCOVERY_ELASTICSEARCH_INDEX_NAME: 'catalog'
 
 DISCOVERY_MEMCACHE: [ 'memcache' ]
 
 DISCOVERY_CACHES:
   default:
-    BACKEND:  'django.core.cache.backends.memcached.MemcachedCache'
-    KEY_PREFIX: 'default'
+    BACKEND:  'django.core.cache.backends.memcached.PyLibMCCache'
+    KEY_PREFIX: '{{ discovery_service_name }}'
     LOCATION: '{{ DISCOVERY_MEMCACHE }}'
 
 DISCOVERY_VERSION: "master"
 DISCOVERY_DJANGO_SETTINGS_MODULE: "course_discovery.settings.production"
 DISCOVERY_URL_ROOT: 'http://discovery:18381'
-DISCOVERY_OAUTH_URL_ROOT: '{{ EDXAPP_LMS_ISSUER | default("http://127.0.0.1:8000/oauth2") }}'
+DISCOVERY_LOGOUT_URL: '{{ DISCOVERY_URL_ROOT }}/logout/'
+DISCOVERY_OAUTH_URL_ROOT: '{{ EDXAPP_LMS_ROOT_URL | default("http://127.0.0.1:8000") }}/oauth2'
+DISCOVERY_OIDC_LOGOUT_URL: '{{ EDXAPP_LMS_ROOT_URL | default("http://127.0.0.1:8000") }}/logout'
 
 DISCOVERY_EDX_DRF_EXTENSIONS:
   OAUTH2_USER_INFO_URL: '{{ DISCOVERY_OAUTH_URL_ROOT }}/user_info'
+
+DISCOVERY_JWT_AUDIENCE: '{{ EDXAPP_JWT_AUDIENCE | default("SET-ME-PLEASE") }}'
+DISCOVERY_JWT_ISSUER: '{{ DISCOVERY_OAUTH_URL_ROOT }}'
+DISCOVERY_JWT_SECRET_KEY: '{{ EDXAPP_JWT_SECRET_KEY | default("lms-secret") }}'
+
+DISCOVERY_JWT_AUTH:
+  JWT_ISSUERS:
+    - AUDIENCE: '{{ DISCOVERY_JWT_AUDIENCE }}'
+      ISSUER: '{{ DISCOVERY_JWT_ISSUER }}'
+      SECRET_KEY: '{{ DISCOVERY_JWT_SECRET_KEY }}'
 
 DISCOVERY_SECRET_KEY: 'Your secret key here'
 DISCOVERY_TIME_ZONE: 'UTC'
@@ -77,6 +88,7 @@ DISCOVERY_COURSES_API_URL: '{{ DISCOVERY_LMS_ROOT_URL }}/api/courses/v1/'
 DISCOVERY_ORGANIZATIONS_API_URL: '{{ DISCOVERY_LMS_ROOT_URL }}/api/organizations/v0/'
 DISCOVERY_MARKETING_API_URL: 'https://example.org/api/catalog/v2/'
 DISCOVERY_MARKETING_URL_ROOT: 'https://example.org/'
+DISCOVERY_PROGRAMS_API_URL: 'https://replace-me/api/v1/'
 
 DISCOVERY_SERVICE_CONFIG:
   SECRET_KEY: '{{ DISCOVERY_SECRET_KEY }}'
@@ -88,14 +100,17 @@ DISCOVERY_SERVICE_CONFIG:
   SOCIAL_AUTH_EDX_OIDC_ID_TOKEN_DECRYPTION_KEY: '{{ DISCOVERY_SOCIAL_AUTH_EDX_OIDC_SECRET }}'
   SOCIAL_AUTH_EDX_OIDC_URL_ROOT: '{{ DISCOVERY_OAUTH_URL_ROOT }}'
   SOCIAL_AUTH_REDIRECT_IS_HTTPS: '{{ DISCOVERY_SOCIAL_AUTH_REDIRECT_IS_HTTPS }}'
+  SOCIAL_AUTH_EDX_OIDC_LOGOUT_URL: '{{ DISCOVERY_OIDC_LOGOUT_URL }}'
 
   STATIC_ROOT: "{{ COMMON_DATA_DIR }}/{{ discovery_service_name }}/staticfiles"
   # db config
   DATABASE_OPTIONS:
     connect_timeout: 10
   DATABASES: '{{ DISCOVERY_DATABASES }}'
-  ELASTICSEARCH: '{{ DISCOVERY_ELASTICSEARCH }}'
   CACHES: '{{ DISCOVERY_CACHES }}'
+
+  ELASTICSEARCH_URL: '{{ DISCOVERY_ELASTICSEARCH_URL }}'
+  ELASTICSEARCH_INDEX_NAME: '{{ DISCOVERY_ELASTICSEARCH_INDEX_NAME }}'
 
   PLATFORM_NAME: '{{ DISCOVERY_PLATFORM_NAME }}'
 
@@ -104,8 +119,11 @@ DISCOVERY_SERVICE_CONFIG:
   ORGANIZATIONS_API_URL: '{{ DISCOVERY_ORGANIZATIONS_API_URL }}'
   MARKETING_API_URL: '{{ DISCOVERY_MARKETING_API_URL }}'
   MARKETING_URL_ROOT: '{{ DISCOVERY_MARKETING_URL_ROOT }}'
+  PROGRAMS_API_URL: '{{ DISCOVERY_PROGRAMS_API_URL }}'
 
   EDX_DRF_EXTENSIONS: '{{ DISCOVERY_EDX_DRF_EXTENSIONS }}'
+
+  JWT_AUTH: '{{ DISCOVERY_JWT_AUTH }}'
 
 
 DISCOVERY_REPOS:
@@ -138,7 +156,8 @@ discovery_environment:
   DJANGO_SETTINGS_MODULE: "{{ DISCOVERY_DJANGO_SETTINGS_MODULE }}"
   # rename should synch with app
   COURSE_DISCOVERY_CFG: "{{ COMMON_CFG_DIR }}/{{ discovery_service_name }}.yml"
-  PATH: "{{ discovery_venv_dir }}/bin:{{ ansible_env.PATH }}"
+  PATH: "{{ discovery_nodeenv_bin }}:{{ discovery_venv_dir }}/bin:{{ ansible_env.PATH }}"
+
 
 discovery_migration_environment:
   DJANGO_SETTINGS_MODULE: "{{ DISCOVERY_DJANGO_SETTINGS_MODULE }}"
@@ -153,6 +172,12 @@ discovery_user: "{{ discovery_service_name }}"
 discovery_home: "{{ COMMON_APP_DIR }}/{{ discovery_service_name }}"
 discovery_code_dir: "{{ discovery_home }}/{{ discovery_service_name }}"
 
+discovery_nodeenv_dir: "{{ discovery_home }}/nodeenvs/{{ discovery_service_name }}"
+discovery_nodeenv_bin: "{{ discovery_nodeenv_dir }}/bin"
+discovery_node_modules_dir: "{{ discovery_code_dir }}/node_modules"
+discovery_node_bin: "{{ discovery_node_modules_dir }}/.bin"
+discovery_node_version: "4.4.7"
+
 discovery_gunicorn_host: "127.0.0.1"
 discovery_gunicorn_port: 8381
 discovery_gunicorn_timeout: 300
@@ -166,5 +191,7 @@ discovery_log_dir: "{{ COMMON_LOG_DIR }}/{{ discovery_service_name }}"
 discovery_debian_pkgs:
   - libmysqlclient-dev
   - libssl-dev
+  - libffi-dev  # Needed to install the Python cryptography library for asymmetric JWT signing
+  - libmemcached-dev # Needed for pylibmc
 
 discovery_redhat_pkgs: []
